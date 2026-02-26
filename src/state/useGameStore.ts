@@ -30,6 +30,7 @@ interface GameStore {
   hasSave: boolean;
   seedInput: string;
   settings: UiSettings;
+  lastError: string | null;
   openTitle: () => void;
   openNewRun: () => void;
   openSettings: () => void;
@@ -46,6 +47,9 @@ interface GameStore {
   toggleFontScale: () => void;
   toggleReduceMotion: () => void;
   toggleHighContrast: () => void;
+  exportSave: () => string | null;
+  importSave: (json: string) => boolean;
+  clearError: () => void;
 }
 
 const initialSave = loadSave();
@@ -71,91 +75,170 @@ export const useGameStore = create<GameStore>((set, get) => ({
   hasSave: Boolean(initialSave),
   seedInput: initialSave?.seed ?? DEFAULT_SEED,
   settings: initialSettings,
+  lastError: null,
 
   openTitle: () => set({ screen: "TITLE" }),
   openNewRun: () => set({ screen: "NEW_RUN" }),
   openSettings: () => set({ screen: "SETTINGS" }),
   openRunJournal: () => {
-    const run = get().run ?? loadSave();
-    if (!run) {
-      set({ hasSave: false, run: null, screen: "TITLE" });
-      return;
+    try {
+      const run = get().run ?? loadSave();
+      if (!run) {
+        set({ hasSave: false, run: null, screen: "TITLE" });
+        return;
+      }
+      set({
+        run,
+        hasSave: true,
+        screen: "RUN_JOURNAL",
+        lastError: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load run journal";
+      set({ lastError: message });
     }
-    set({
-      run,
-      hasSave: true,
-      screen: "RUN_JOURNAL",
-    });
   },
   openGame: () => set({ screen: "GAME" }),
 
   continueRun: () => {
-    const saved = loadSave();
-    if (!saved) {
-      set({ hasSave: false, run: null });
-      return;
+    try {
+      const saved = loadSave();
+      if (!saved) {
+        set({ hasSave: false, run: null, lastError: null });
+        return;
+      }
+      set({
+        run: saved,
+        hasSave: true,
+        seedInput: saved.seed,
+        screen: "GAME",
+        lastError: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to continue run";
+      set({ lastError: message });
     }
-    set({
-      run: saved,
-      hasSave: true,
-      seedInput: saved.seed,
-      screen: "GAME",
-    });
   },
 
   startNewRun: () => {
-    const seed = get().seedInput.trim() || DEFAULT_SEED;
-    const run = createInitialGameState(seed);
-    writeSave(run);
-    set({
-      run,
-      hasSave: true,
-      seedInput: seed,
-      screen: "GAME",
-    });
+    try {
+      const seed = get().seedInput.trim() || DEFAULT_SEED;
+      const run = createInitialGameState(seed);
+      writeSave(run);
+      set({
+        run,
+        hasSave: true,
+        seedInput: seed,
+        screen: "GAME",
+        lastError: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to start new run";
+      set({ lastError: message });
+    }
   },
 
   setSeedInput: (value: string) => set({ seedInput: value }),
 
   beginNight: () => {
-    const run = get().run;
-    if (!run) {
-      return;
+    try {
+      const run = get().run;
+      if (!run) {
+        set({ lastError: "No active run" });
+        return;
+      }
+      const next = beginNight(run);
+      writeSave(next);
+      set({ run: next, hasSave: true, lastError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to begin night";
+      set({ lastError: message });
     }
-    const next = beginNight(run);
-    writeSave(next);
-    set({ run: next, hasSave: true });
   },
 
   resolveNight: (choiceId) => {
-    const run = get().run;
-    if (!run) {
-      return;
+    try {
+      const run = get().run;
+      if (!run) {
+        set({ lastError: "No active run" });
+        return;
+      }
+      const next = resolveNightScene(run, choiceId);
+      writeSave(next);
+      set({ run: next, hasSave: true, lastError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to resolve night";
+      set({ lastError: message });
     }
-    const next = resolveNightScene(run, choiceId);
-    writeSave(next);
-    set({ run: next, hasSave: true });
   },
 
   startNextDay: () => {
-    const run = get().run;
-    if (!run) {
-      return;
+    try {
+      const run = get().run;
+      if (!run) {
+        set({ lastError: "No active run" });
+        return;
+      }
+      const next = startNextDay(run);
+      writeSave(next);
+      set({ run: next, hasSave: true, lastError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to start next day";
+      set({ lastError: message });
     }
-    const next = startNextDay(run);
-    writeSave(next);
-    set({ run: next, hasSave: true });
   },
 
   clearProgress: () => {
-    clearSave();
-    set({
-      run: null,
-      hasSave: false,
-      screen: "TITLE",
-      seedInput: DEFAULT_SEED,
-    });
+    try {
+      clearSave();
+      set({
+        run: null,
+        hasSave: false,
+        screen: "TITLE",
+        seedInput: DEFAULT_SEED,
+        lastError: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to clear progress";
+      set({ lastError: message });
+    }
   },
+
+  exportSave: () => {
+    try {
+      const run = get().run;
+      if (!run) {
+        set({ lastError: "No active run to export" });
+        return null;
+      }
+      const json = JSON.stringify(run, null, 2);
+      return json;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to export save";
+      set({ lastError: message });
+      return null;
+    }
+  },
+
+  importSave: (json: string) => {
+    try {
+      const parsed = JSON.parse(json);
+      writeSave(parsed);
+      set({
+        run: parsed,
+        hasSave: true,
+        seedInput: parsed.seed,
+        lastError: null,
+      });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to import save";
+      set({ lastError: message });
+      return false;
+    }
+  },
+
+  clearError: () => set({ lastError: null }),
 
   toggleCompactLog: () =>
     set((state) => ({

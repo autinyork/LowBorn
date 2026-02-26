@@ -1,3 +1,20 @@
+/**
+ * Core game simulation engine for Lowborn
+ * Handles:
+ * - Week schedule generation
+ * - Daily disruptions and reassignments
+ * - Night event resolution and player decision-making
+ * - Debrief scene generation and NPC reports
+ * - Rumor propagation mechanics
+ * - Player/camp stat calculations
+ * - Week summary and end-game determination
+ *
+ * All randomness is deterministic (seeded) to enable:
+ * - Reproducible runs with same seed
+ * - Replay/journal functionality
+ * - Testing and balance tuning
+ */
+
 import { nightEventCards } from "../content/events";
 import { frontierNames } from "../content/names";
 import { npcTemplates } from "../content/npcs";

@@ -153,6 +153,9 @@ export function App() {
             onToggleHighContrast={toggleHighContrast}
             onBack={openTitle}
             onClearSave={clearProgress}
+            seed={run?.seed ?? "lowborn-save"}
+            onExportSave={useGameStore((state) => state.exportSave)}
+            onImportSave={useGameStore((state) => state.importSave)}
           />
         )}
 

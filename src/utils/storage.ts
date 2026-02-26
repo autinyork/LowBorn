@@ -1,3 +1,8 @@
+/**
+ * Persistent storage utilities for game saves and settings
+ * Uses localStorage as backend; gracefully handles when unavailable (SSR)
+ */
+
 import { migrateSavePayload, toSaveEnvelope } from "../game/migrations";
 import type { GameState } from "../game/types";
 import { z } from "zod";
@@ -21,6 +26,11 @@ function getStorage(): Storage | null {
   return window.localStorage;
 }
 
+/**
+ * Load the most recent saved game state
+ * Handles migrations for backward compatibility with older save formats
+ * @returns The loaded GameState or null if no save exists or load fails
+ */
 export function loadSave(): GameState | null {
   try {
     const storage = getStorage();
@@ -48,6 +58,11 @@ export function loadSave(): GameState | null {
   }
 }
 
+/**
+ * Save the current game state to localStorage
+ * Wrapped with envelope for versioning support
+ * @param gameState - The state to persist
+ */
 export function writeSave(gameState: GameState): void {
   const storage = getStorage();
   if (!storage) {
@@ -56,6 +71,9 @@ export function writeSave(gameState: GameState): void {
   storage.setItem(SAVE_KEY, JSON.stringify(toSaveEnvelope(gameState)));
 }
 
+/**
+ * Delete the saved game state
+ */
 export function clearSave(): void {
   const storage = getStorage();
   if (!storage) {
@@ -64,6 +82,10 @@ export function clearSave(): void {
   storage.removeItem(SAVE_KEY);
 }
 
+/**
+ * Load user settings with defaults
+ * @returns User settings or null if no settings have been saved
+ */
 export function loadSettings(): PersistedSettings | null {
   try {
     const storage = getStorage();
@@ -80,6 +102,10 @@ export function loadSettings(): PersistedSettings | null {
   }
 }
 
+/**
+ * Persist user settings to localStorage
+ * @param settings - The settings object to save
+ */
 export function writeSettings(settings: PersistedSettings): void {
   const storage = getStorage();
   if (!storage) {

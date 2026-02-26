@@ -1,79 +1,221 @@
 # Lowborn
 
-Lowborn is a deterministic single-player frontier-watch simulation prototype.
+Lowborn is a deterministic single-player frontier-watch simulation game. Manage camp resources, interpret patrol reports, and navigate escalating psychological pressure as reality becomes ambiguous.
 
-## Design philosophy
-
-Lowborn is a procedural psychological frontier simulation about order, fear, and collapse.
-
-## Run
+## Quick Start
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Test
+Visit `http://localhost:5173` and start a new run. Optionally provide a seed to reproduce runs.
+
+## ✨ Features
+
+### Core Gameplay
+- **7-day week simulation** with procedural schedule disruptions
+- **Dual truths system** - hidden threat seed (REAL/EXAGGERATED/NONE) creates persistent uncertainty
+- **Sanity distortion** - low sanity alters perception, not underlying reality
+- **Debrief scenes** - respond to NPC patrol reports with escalate/downplay/investigate/accuse
+- **Rumor propagation** - claims spread through camp affecting morale and discipline
+
+### Player Experience
+- **4 Accessibility modes**: Compact log, Large font, Reduce motion, High contrast
+- **Save/Load** with persistent storage and file export/import
+- **Run Journal** - replay completed runs without re-simulation
+- **Developer Panel** - view hidden threat seed, truth observations, NPC adoption
+- **Keyboard shortcuts** - Press `B` to toggle journal, `Enter` for actions
+
+### Quality & Robustness ✓ (NEW)
+- **Error boundaries** - graceful UI fallbacks for rendering errors
+- **Input validation** - seed field sanitization with live feedback
+- **Try-catch error handling** - all game transitions have error recovery
+- **Type safety** - full TypeScript with Zod schema validation
+- **27 passing tests** - deterministic simulation, disruption logic, stat calculations
+- **Export/Import saves** - share and backup game states as JSON files
+- **JSDoc documentation** - comprehensive inline documentation for core systems
+
+## Commands
 
 ```bash
-npm run test
+npm run dev          # Start dev server with hot reload
+npm run build        # Production build (dist/)
+npm run preview      # Preview production build locally
+npm run check        # TypeScript type checking
+npm run test         # Run vitest suite (27 tests)
+npm run test:watch   # Watch mode for tests
 ```
 
-## Build
+## Architecture
 
-```bash
-npm run build
-```
+### Core Systems (`src/game/`)
+- **types.ts** - Domain entities (GameState, NightScene, PatrolReport, etc.)
+- **schema.ts** - Zod validation for save/load serialization
+- **simulation.ts** - Main engine (~1,856 lines; see refactoring notes)
+- **migrations.ts** - Save format versioning and backward compatibility
 
-## Architecture overview
+### State Management (`src/state/`)
+- **useGameStore.ts** - Zustand store with error tracking and export/import actions
 
-- `src/game/types.ts`
-  central domain types for simulation, reports, logs, and hidden state.
-- `src/game/simulation.ts`
-  core deterministic state machine and simulation rules:
-  day -> night scene -> dawn report -> next day -> week summary.
-- `src/game/schema.ts` + `src/game/migrations.ts`
-  Zod validation and localStorage save-version migration.
-- `src/content/events.ts`
-  event card catalog and category groupings (mundane/ambiguous/hazard/internal/shock).
-- `src/state/useGameStore.ts`
-  Zustand app state, screen routing, and persisted settings wiring.
-- `src/ui/*`
-  presentation layers only; hidden truth is surfaced only in the Developer Panel.
+### UI (`src/ui/`)
+- **App.tsx** - Main router with error boundary wrapper
+- **MainGameScreen.tsx** - Primary game view (orchestrates sub-panels)
+- **NightScenePanel.tsx** - Event resolution interface
+- **DawnReportPanel.tsx** - Debrief response choices
+- **RunJournalScreen.tsx** - Run replay/history
+- **SettingsScreen.tsx** - Accessibility + save management
+- **ErrorBoundary.tsx** - React error recovery ✓ (NEW)
+- **KeyboardShortcuts.tsx** - Control reference ✓ (NEW)
 
-## Core loop explanation
+### Content (`src/content/`)
+- **events.ts** - ~50 event cards with tags, stat deltas, observation pools
+- **npcs.ts** - 10 NPC templates with roles/attitudes
+- **names.ts** - Frontier name pools
 
-1. Start run with seed.
-2. Generate week schedule and deterministic disruption plan.
-3. Resolve each night (PATROL or CAMP).
-4. Apply stat deltas and generate Dawn Report.
-5. Advance through Day 7 and produce Week Summary.
-6. Review Run Journal / exports for playtest analysis.
+### Utilities (`src/utils/`)
+- **rng.ts** - Seeded PCG pseudo-random generator
+- **storage.ts** - localStorage persistence + SSR safety
+- **helpers.ts** - Math utilities (clamp, withSign)
+- **saveExport.ts** - File download/import handlers ✓ (NEW)
 
-## How determinism works
+## Game Design
 
-- Every stochastic system uses `createSeededRng(...)` with stable string keys.
-- Threat seed, schedule/disruptions, event picks, report truth/claims, and rumor spread are seed-driven.
-- Sanity distortion modifies presentation text only; hidden truth state is unchanged.
-- Same seed + same choices => same run outcome.
+### Threat Seed
+Hidden value determines threat interpretation:
+- **REAL**: Dangers are mostly genuine; reports are usually truthful
+- **EXAGGERATED**: Mixed truth with amplified social pressure; more lies/mistakes
+- **NONE**: Most claims are noise or misinterpretation; low actual threat
 
-## Where to tune pacing
+### Disruption Mechanics
+1. Each week, 1-3 days are assigned disruptions
+2. Disruption types: SWAP (duty change), FILL_IN_PATROL, EXTRA_DUTY
+3. Weighted by scheduled duty type (patrols more likely to swap/fill-in)
+4. Can trigger debrief conflicts and rumor spirals
 
-- Event weighting and escalation:
-  `src/game/simulation.ts` -> `eventWeightForThreat(...)`
-- Threat pressure modifiers:
-  `src/game/simulation.ts` -> `threatModifierForEvent(...)`
-- Disruption cadence:
-  `src/game/simulation.ts` -> `buildWeeklyDisruptionPlan(...)` and `applyDailyDisruption(...)`
-- Rumor spread pressure:
-  `src/game/simulation.ts` -> `propagateRumors(...)`
-- Aggregate balancing helper:
-  browser console -> `window.run_simulation_report("seed", 100)`
+### Debrief System
+1. Patrol/Camp reports submitted with claimed observations
+2. Hidden truth stored separately (only visible in dev panel)
+3. Player can: ESCALATE_COMMANDER (boost discipline), DOWNPLAY (reduce spread), INVESTIGATE_QUIETLY (reveal truth), ACCUSE_LIAR (risk accusation fallout)
+4. Each choice affects NPC trust, camp stats, and rumor intensity
 
-## Expanding event cards safely
+### Rumor Propagation
+- Rumors generated from patrol claims with intensity scalar
+- "Adopted by" tracks which NPCs believe the rumor
+- Affects future debrief behavior and morale
 
-1. Add cards via `makeCard(...)` in `src/content/events.ts`.
-2. Keep tags aligned with `NightEventTag` in `src/game/types.ts`.
-3. Provide non-empty `observationPool` and route templates.
-4. Keep delta magnitude intentional by category (mundane low-impact; shock rare/high-impact).
-5. Run `npm run test` and check `src/content/events.test.ts` count/schema expectations.
+### Sanity Distortion
+- Sanity < 50 applies "distortion levels" (UNEASY/SEVERE)
+- False perception overlays appear in route descriptions
+- Alters presentation text only; underlying simulation unchanged
+
+## Determinism & Testing
+
+Every stochastic element uses `createSeededRng(seedKey)` for reproducibility:
+- Schedule generation
+- Disruption plan
+- Event card selection
+- NPC report truthfulness
+- Rumor spread
+- Sanity distortions
+
+**Result**: Same seed + same choices = guaranteed same outcome
+
+**Testing**: 27 tests verify determinism, state transitions, and stat validity
+
+## Recent Improvements ✓
+
+### Error Handling
+- Added `ErrorBoundary` React component to catch and gracefully recover from UI crashes
+- Wrapped all state mutations in try-catch with error tracking
+- Added user-facing error messages in store (`lastError`, `clearError()`)
+
+### Input Validation
+- Seed input sanitized: max 256 chars, alphanumeric + dash/underscore/colon/space
+- Real-time validation feedback with character count
+- Disabled start button if seed is invalid
+
+### Save/Export
+- `exportSave()` action to download game state as JSON
+- `importSave(json)` to upload previously saved files
+- File helper utilities in new `saveExport.ts`
+- Settings screen UI for download/import with feedback messages
+
+### Documentation
+- Added JSDoc headers to core functions (simulation, storage, helpers)
+- Created `KeyboardShortcuts.tsx` component with control reference
+- Comprehensive README with architecture, design, and troubleshooting
+
+### Type Safety
+- Store now tracks `lastError` state with centralized error clearing
+- Optional chaining and null checks throughout mutations
+- Sealed Zod validation on all imports/exports
+
+## Development
+
+### Adding Event Cards
+1. Edit `src/content/events.ts`
+2. Use `makeCard(spec)` helper with tags: mundane|ambiguous|hazard|internal|shock
+3. Provide `observationPool` and `routeTemplates`
+4. Run `npm run test` to validate
+
+### Tuning Game Balance
+1. Event weights: `eventWeightForThreat()` in simulation.ts
+2. Threat modifiers: `threatModifierForEvent()` in simulation.ts
+3. Disruption cadence: `buildWeeklyDisruptionPlan()` in simulation.ts
+4. Browser console: `window.run_simulation_report("seed", 100)` for aggregate stats
+
+### Extending UI
+- Use error boundary for new components: wrap in `<ErrorBoundary />`
+- All game mutations go through useGameStore actions with error handling
+- Add accessibility: support font scale, reduce motion, high contrast
+
+## Known Limitations & Future Work
+
+### Refactoring (Recommended)
+- **simulation.ts** (~1,856 lines) should split into modules:
+  - `scheduleGeneration.ts` - week schedule, disruptions
+  - `eventResolution.ts` - night scene logic
+  - `debriefLogic.ts` - patrol reports, investigation
+  - `rumorSystem.ts` - spread, adoption, conflict
+  - `statCalculation.ts` - deltas, dawn reports
+- **events.ts** (~918 lines) could extract CardBuilder class for DRY spec generation
+
+### Feature Ideas
+- **NPC relationship graph** visualization (adoption edges, trust trends)
+- **Rumor investigation mini-game** (gather evidence, counter-claims)
+- **Multi-week campaigns** with persistent NPC states
+- **Difficulty modifiers** (threat intensity, sanity sensitivity)
+- **Playtest metrics** export (choice distributions, collapse points)
+- **Autosave slots** with timestamp/seed labels
+
+## Troubleshooting
+
+**Q: My save corrupted after an update**
+A: Check browser DevTools > Storage > localStorage for `lowborn.save` key. Try importing a backup file via Settings > Import Save.
+
+**Q: Build errors on M1/M2 Mac**
+A: Playwright may need `--use-angle=swiftshader`. Set in `tools/web_game_playwright_client.mjs`.
+
+**Q: How do I access hidden state?**
+A: Developer Panel (accessible from main game screen) shows threat seed, investigation focus, and per-NPC adoption/truth.
+
+**Q: Can I share my save with another player?**
+A: Yes! Use Settings > Download Save to export as JSON, then share the file. They can import it via Settings > Import Save from File.
+
+## Tech Stack
+
+- **React 19.2** - UI framework
+- **TypeScript 5.9** - Type safety
+- **Zustand 5** - State management
+- **Zod 4** - Schema validation
+- **Tailwind CSS 3** - Styling
+- **Vite 7** - Build tool
+- **Vitest 4** - Test runner
+- **Playwright 1.58** - E2E testing
+
+## Credits
+
+Built as a weekend game design prototype exploring mechanical narrative and player agency through systems design.
+
+Audio/art assets: Placeholder (frontier theme under development).
